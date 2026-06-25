@@ -1,4 +1,9 @@
 #!/bin/bash
+set -euo pipefail
+
+# Delegate to the actual init script kept under docker/
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "${SCRIPT_DIR}/docker/init.sh" "$@"
 
 if [ -d "/home/frappe/frappe-bench/apps/frappe" ]; then
     echo "Bench already exists, skipping init"
