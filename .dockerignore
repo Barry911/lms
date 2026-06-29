@@ -1,7 +1,5 @@
 .git
 .github
-*.md
-!lms/**
 node_modules
 __pycache__
 *.pyc
