@@ -1,32 +1,142 @@
-version: "3.7"
-name: lms
+
+
 services:
-  mariadb:
-    image: mariadb:10.8
+  db:
+    image: mariadb:10.6
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --skip-character-set-client-handshake
-      - --skip-innodb-read-only-compressed # Temporary fix for MariaDB 10.6
+      - --skip-innodb-read-only-compressed
     environment:
-      MYSQL_ROOT_PASSWORD: 123
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123}
     volumes:
-      - mariadb-data:/var/lib/mysql
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  redis:
+  redis-cache:
     image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  frappe:
-    image: frappe/bench:latest
-    command: bash /workspace/init.sh
+  redis-queue:
+    image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
     environment:
-      - SHELL=/bin/bash
-    working_dir: /home/frappe
+      DB_HOST: db
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      SITE_NAME: ${SITE_NAME:-lms.localhost}
+      REDIS_CACHE: redis://redis-cache:6379
+      REDIS_QUEUE: redis://redis-queue:6379
+      REDIS_SOCKETIO: redis://redis-queue:6379
     volumes:
-      - .:/workspace
-    ports:
-      - 8000:8000
-      - 9000:9000
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+
+  websocket:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    command: node /home/frappe/frappe-bench/apps/frappe/socketio.js
+    environment:
+      DB_HOST: db
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      SITE_NAME: ${SITE_NAME:-lms.localhost}
+      REDIS_CACHE: redis://redis-cache:6379
+      REDIS_QUEUE: redis://redis-queue:6379
+      REDIS_SOCKETIO: redis://redis-queue:6379
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      backend:
+        condition: service_started
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    command: bench scheduler
+    environment:
+      DB_HOST: db
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      SITE_NAME: ${SITE_NAME:-lms.localhost}
+      REDIS_CACHE: redis://redis-cache:6379
+      REDIS_QUEUE: redis://redis-queue:6379
+      REDIS_SOCKETIO: redis://redis-queue:6379
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      backend:
+        condition: service_started
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    command: bench worker --queue default,short,long
+    environment:
+      DB_HOST: db
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-123}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      SITE_NAME: ${SITE_NAME:-lms.localhost}
+      REDIS_CACHE: redis://redis-cache:6379
+      REDIS_QUEUE: redis://redis-queue:6379
+      REDIS_SOCKETIO: redis://redis-queue:6379
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    depends_on:
+      backend:
+        condition: service_started
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    expose:
+      - "8080"
+    depends_on:
+      backend:
+        condition: service_started
+      websocket:
+        condition: service_started
 
 volumes:
-  mariadb-data:
+  db-data:
+  sites:
+  logs:
