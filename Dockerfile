@@ -35,7 +35,7 @@ RUN cp -r sites/assets /home/frappe/frappe-bench/assets && \
     rm -rf sites/assets
 
 # --- Stage 2: Final lightweight backend and runner image ---
-FROM frappe/frappe-worker:version-15 AS backend
+FROM frappe/bench:latest AS backend
 
 USER frappe
 WORKDIR /home/frappe/frappe-bench
