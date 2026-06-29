@@ -33,6 +33,10 @@ RUN cd apps/lms \
     && ./env/bin/pip install -e apps/lms \
     && echo "lms" >> sites/apps.txt
 
+# Install Node.js dependencies (skipped by manual install, normally done by bench get-app)
+RUN yarn --cwd apps/lms install --pure-lockfile 2>/dev/null; \
+    bench setup requirements --node
+
 # Build all frontend assets (Vite/yarn)
 RUN bench build --production
 
