@@ -21,11 +21,17 @@ WORKDIR /home/frappe/frappe-bench
 # Install official payments app
 RUN bench get-app payments
 
-# Copy local lms app source code to a temporary directory
-COPY --chown=frappe:frappe . /tmp/lms
+# Copy local lms app source code directly into the bench apps directory
+COPY --chown=frappe:frappe . apps/lms
 
-# Install local lms app and resolve requirements
-RUN bench get-app --local /tmp/lms
+# Manually install the lms app (bench get-app requires a git repo, which COPY doesn't preserve reliably)
+RUN cd apps/lms \
+    && git init \
+    && git add -A \
+    && git -c user.name="docker" -c user.email="docker@build" commit -m "docker build" --quiet \
+    && cd /home/frappe/frappe-bench \
+    && ./env/bin/pip install -e apps/lms \
+    && echo "lms" >> sites/apps.txt
 
 # Build all frontend assets (Vite/yarn)
 RUN bench build --production
