@@ -21,11 +21,11 @@ WORKDIR /home/frappe/frappe-bench
 # Install official payments app
 RUN bench get-app payments
 
-# Copy local lms app source code
-COPY --chown=frappe:frappe . apps/lms
+# Copy local lms app source code to a temporary directory
+COPY --chown=frappe:frappe . /tmp/lms
 
 # Install local lms app and resolve requirements
-RUN bench get-app --local apps/lms
+RUN bench get-app --local /tmp/lms
 
 # Build all frontend assets (Vite/yarn)
 RUN bench build --production
